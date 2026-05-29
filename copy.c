@@ -5,6 +5,7 @@
 #include "path.h"
 #include "gettext.h"
 #include "strbuf.h"
+#include "trace2.h"
 #include "abspath.h"
 
 #if defined(__linux__)
@@ -99,6 +100,7 @@ int copy_file_cow(const char *dst, const char *src)
 #endif
 
 	if (ioctl(fdo, FICLONE, fdi) == 0) {
+		trace2_data_string("cow", NULL, "status", "success");
 		ret = 0;
 	} else {
 		/* If FICLONE fails, we must remove the created file */
@@ -110,7 +112,11 @@ int copy_file_cow(const char *dst, const char *src)
 	return ret;
 
 #elif defined(__APPLE__)
-	return clonefile(src, dst, 0);
+	if (!clonefile(src, dst, 0)) {
+		trace2_data_string("cow", NULL, "status", "success");
+		return 0;
+	}
+	return -1;
 
 #else
 	return -1;

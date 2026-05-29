@@ -1250,8 +1250,15 @@ test_expect_success 'relative worktree sets extension config' '
 
 test_expect_success '"add --copy-on-write" copies files on supported OS' '
 	test_commit cow-test &&
-	git worktree add --copy-on-write cow-worktree HEAD &&
-	test_cmp cow-test.t cow-worktree/cow-test.t
+	GIT_TRACE2_EVENT="$(pwd)/trace.txt" git worktree add --copy-on-write cow-worktree HEAD &&
+	test_cmp cow-test.t cow-worktree/cow-test.t &&
+	if grep -q "\"category\":\"cow\",\"key\":\"status\",\"value\":\"success\"" trace.txt
+	then
+		echo "COW was successfully invoked"
+	else
+		echo "COW was not supported on this filesystem, skipped" &&
+		test_skip="Filesystem does not support COW"
+	fi
 '
 
 test_done
