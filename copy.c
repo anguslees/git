@@ -7,6 +7,13 @@
 #include "strbuf.h"
 #include "abspath.h"
 
+#if defined(__linux__)
+#include <sys/ioctl.h>
+#include <linux/fs.h>
+#elif defined(__APPLE__)
+#include <sys/clonefile.h>
+#endif
+
 int copy_fd(int ifd, int ofd)
 {
 	while (1) {
@@ -71,4 +78,41 @@ int copy_file_with_time(const char *dst, const char *src, int mode)
 	if (!status)
 		return copy_times(dst, src);
 	return status;
+}
+
+int copy_file_cow(const char *dst, const char *src)
+{
+#if defined(__linux__)
+	int fdi, fdo;
+	int ret = -1;
+
+	if ((fdi = open(src, O_RDONLY)) < 0)
+		return -1;
+	/* Create file; if successful, perform COW */
+	if ((fdo = open(dst, O_WRONLY | O_CREAT | O_EXCL, 0666)) < 0) {
+		close(fdi);
+		return -1;
+	}
+
+#ifndef FICLONE
+#define FICLONE _IOW(0x94, 9, int)
+#endif
+
+	if (ioctl(fdo, FICLONE, fdi) == 0) {
+		ret = 0;
+	} else {
+		/* If FICLONE fails, we must remove the created file */
+		unlink(dst);
+	}
+
+	close(fdi);
+	close(fdo);
+	return ret;
+
+#elif defined(__APPLE__)
+	return clonefile(src, dst, 0);
+
+#else
+	return -1;
+#endif
 }

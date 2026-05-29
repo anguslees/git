@@ -11,6 +11,8 @@ struct checkout {
 	const char *base_dir;
 	int base_dir_len;
 	const char *super_prefix;
+	const char *cow_src_dir;
+	struct index_state *cow_src_index;
 	struct delayed_checkout *delayed_checkout;
 	struct checkout_metadata meta;
 	unsigned force:1,

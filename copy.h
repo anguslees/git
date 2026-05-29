@@ -6,5 +6,6 @@
 int copy_fd(int ifd, int ofd);
 int copy_file(const char *dst, const char *src, int mode);
 int copy_file_with_time(const char *dst, const char *src, int mode);
+int copy_file_cow(const char *dst, const char *src);
 
 #endif /* COPY_H */

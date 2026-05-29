@@ -59,7 +59,7 @@ static inline int is_merge(void)
 	return !access(git_path_merge_head(the_repository), F_OK);
 }
 
-static int reset_index(const char *ref, const struct object_id *oid, int reset_type, int quiet)
+static int reset_index(const char *ref, const struct object_id *oid, int reset_type, int quiet, const char *cow_src_dir, const char *cow_src_index_file)
 {
 	int i, nr = 0;
 	struct tree_desc desc[2];
@@ -74,6 +74,8 @@ static int reset_index(const char *ref, const struct object_id *oid, int reset_t
 	opts.fn = oneway_merge;
 	opts.merge = 1;
 	init_checkout_metadata(&opts.meta, ref, oid, NULL);
+	opts.cow_src_dir = cow_src_dir;
+	opts.cow_src_index_file = cow_src_index_file;
 	if (!quiet)
 		opts.verbose_update = 1;
 	switch (reset_type) {
@@ -343,6 +345,8 @@ int cmd_reset(int argc,
 	int patch_mode = 0, pathspec_file_nul = 0, unborn;
 	const char *rev;
 	char *pathspec_from_file = NULL;
+	const char *cow_src_dir = NULL;
+	const char *cow_src_index_file = NULL;
 	struct object_id oid;
 	struct pathspec pathspec;
 	int intent_to_add = 0;
@@ -377,6 +381,10 @@ int cmd_reset(int argc,
 		OPT_DIFF_INTERHUNK_CONTEXT(&interactive_opts.interhunkcontext),
 		OPT_BOOL('N', "intent-to-add", &intent_to_add,
 				N_("record only the fact that removed paths will be added later")),
+		OPT_STRING(0, "copy-on-write-src", &cow_src_dir, N_("dir"),
+			   N_("copy-on-write source worktree (internal use)")),
+		OPT_STRING(0, "copy-on-write-src-index", &cow_src_index_file, N_("file"),
+			   N_("copy-on-write source index file (internal use)")),
 		OPT_PATHSPEC_FROM_FILE(&pathspec_from_file),
 		OPT_PATHSPEC_FILE_NUL(&pathspec_file_nul),
 		OPT_END()
@@ -519,9 +527,9 @@ int cmd_reset(int argc,
 			if (ref && !starts_with(ref, "refs/"))
 				FREE_AND_NULL(ref);
 
-			err = reset_index(ref, &oid, reset_type, quiet);
+			err = reset_index(ref, &oid, reset_type, quiet, cow_src_dir, cow_src_index_file);
 			if (reset_type == KEEP && !err)
-				err = reset_index(ref, &oid, MIXED, quiet);
+				err = reset_index(ref, &oid, MIXED, quiet, cow_src_dir, cow_src_index_file);
 			if (err)
 				die(_("Could not reset index file to revision '%s'."), rev);
 			free(ref);

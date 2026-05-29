@@ -436,7 +436,19 @@ static int check_updates(struct unpack_trees_options *o,
 	state.quiet = 1;
 	state.refresh_cache = 1;
 	state.istate = index;
+	state.cow_src_dir = o->cow_src_dir;
 	clone_checkout_metadata(&state.meta, &o->meta, NULL);
+
+	if (o->cow_src_index_file && o->cow_src_dir) {
+		char *git_dir = xstrfmt("%s/.git", o->cow_src_dir);
+		state.cow_src_index = xcalloc(1, sizeof(*state.cow_src_index));
+		index_state_init(state.cow_src_index, the_repository);
+		if (read_index_from(state.cow_src_index, o->cow_src_index_file, git_dir) < 0) {
+			free(state.cow_src_index);
+			state.cow_src_index = NULL;
+		}
+		free(git_dir);
+	}
 
 	if (!o->update || o->dry_run) {
 		remove_marked_cache_entries(index, 0);
@@ -509,6 +521,11 @@ static int check_updates(struct unpack_trees_options *o,
 
 	if (o->clone)
 		report_collided_checkout(index);
+
+	if (state.cow_src_index) {
+		discard_index(state.cow_src_index);
+		free(state.cow_src_index);
+	}
 
 	trace_performance_leave("check_updates");
 	return errs != 0;

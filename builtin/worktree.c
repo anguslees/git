@@ -122,6 +122,7 @@ struct add_opts {
 	int quiet;
 	int checkout;
 	int orphan;
+	int copy_on_write;
 	int relative_paths;
 	const char *keep_locked;
 };
@@ -405,6 +406,11 @@ static int checkout_worktree(const struct add_opts *opts,
 	strvec_pushl(&cp.args, "reset", "--hard", "--no-recurse-submodules", NULL);
 	if (opts->quiet)
 		strvec_push(&cp.args, "--quiet");
+	if (opts->copy_on_write && repo_get_work_tree(the_repository)) {
+		const char *src_wt = absolute_path(repo_get_work_tree(the_repository));
+		strvec_pushf(&cp.args, "--copy-on-write-src=%s", src_wt);
+		strvec_pushf(&cp.args, "--copy-on-write-src-index=%s", absolute_path(the_repository->index_file));
+	}
 	strvec_pushv(&cp.env, child_env->v);
 	return run_command(&cp);
 }
@@ -821,6 +827,8 @@ static int add(int ac, const char **av, const char *prefix,
 			     PARSE_OPT_NOARG | PARSE_OPT_OPTARG),
 		OPT_BOOL(0, "guess-remote", &guess_remote,
 			 N_("try to match the new branch name with a remote-tracking branch")),
+		OPT_BOOL(0, "copy-on-write", &opts.copy_on_write,
+			 N_("attempt to use copy-on-write (clonefile/FICLONE) for the checkout")),
 		OPT_BOOL(0, "relative-paths", &opts.relative_paths,
 			 N_("use relative paths for worktrees")),
 		OPT_END()

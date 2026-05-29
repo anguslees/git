@@ -1248,4 +1248,10 @@ test_expect_success 'relative worktree sets extension config' '
 	test_cmp_config -C repo true extensions.relativeworktrees
 '
 
+test_expect_success '"add --copy-on-write" copies files on supported OS' '
+	test_commit cow-test &&
+	git worktree add --copy-on-write cow-worktree HEAD &&
+	test_cmp cow-test.t cow-worktree/cow-test.t
+'
+
 test_done

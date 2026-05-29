@@ -15,6 +15,8 @@
 #include "fsmonitor.h"
 #include "entry.h"
 #include "parallel-checkout.h"
+#include "tree.h"
+#include "copy.h"
 
 static void create_directories(const char *path, int path_len,
 			       const struct checkout *state)
@@ -331,6 +333,27 @@ static int write_entry(struct cache_entry *ce, char *path, struct conv_attrs *ca
 		break;
 
 	case S_IFREG:
+		if (state->cow_src_dir && state->cow_src_index && !to_tempfile) {
+			int pos = index_name_pos(state->cow_src_index, ce->name, ce->ce_namelen);
+			if (pos >= 0) {
+				struct cache_entry *src_ce = state->cow_src_index->cache[pos];
+				if (oideq(&ce->oid, &src_ce->oid)) {
+					char *src_path = xstrfmt("%s/%s", state->cow_src_dir, ce->name);
+					struct stat src_st;
+					if (!lstat(src_path, &src_st) &&
+					    !ie_match_stat(state->cow_src_index, src_ce, &src_st, CE_MATCH_IGNORE_VALID|CE_MATCH_IGNORE_SKIP_WORKTREE)) {
+						if (!copy_file_cow(path, src_path)) {
+							free(src_path);
+							if (lstat(path, &st) == 0)
+								fstat_done = 1;
+							goto finish;
+						}
+					}
+					free(src_path);
+				}
+			}
+		}
+
 		/*
 		 * We do not send the blob in case of a retry, so do not
 		 * bother reading it at all.
