@@ -358,6 +358,16 @@ void write_pc_item(struct parallel_checkout_item *pc_item,
 		goto out;
 	}
 
+	if (checkout_cow_file(pc_item->ce, state, path.buf)) {
+		if (lstat(path.buf, &pc_item->st) < 0) {
+			error_errno("unable to stat just-written file '%s'",  path.buf);
+			pc_item->status = PC_ITEM_FAILED;
+		} else {
+			pc_item->status = PC_ITEM_WRITTEN;
+		}
+		goto out;
+	}
+
 	fd = open(path.buf, O_WRONLY | O_CREAT | O_EXCL, mode);
 
 	if (fd < 0) {
@@ -476,6 +486,10 @@ static struct pc_worker *setup_workers(struct checkout *state, int num_workers)
 		strvec_push(&cp->args, "checkout--worker");
 		if (state->base_dir_len)
 			strvec_pushf(&cp->args, "--prefix=%s", state->base_dir);
+		if (state->cow_src_dir)
+			strvec_pushf(&cp->args, "--copy-on-write-src=%s", state->cow_src_dir);
+		if (state->cow_src_index_file)
+			strvec_pushf(&cp->args, "--copy-on-write-src-index=%s", state->cow_src_index_file);
 		if (start_command(cp))
 			die("failed to spawn checkout worker");
 	}

@@ -17,6 +17,7 @@
 #include "parallel-checkout.h"
 #include "tree.h"
 #include "copy.h"
+#include "trace2.h"
 
 static void create_directories(const char *path, int path_len,
 			       const struct checkout *state)
@@ -284,7 +285,33 @@ void update_ce_after_write(const struct checkout *state, struct cache_entry *ce,
 }
 
 /* Note: ca is used (and required) iff the entry refers to a regular file. */
-static int write_entry(struct cache_entry *ce, char *path, struct conv_attrs *ca,
+int checkout_cow_file(const struct cache_entry *ce, const struct checkout *state, const char *path)
+{
+	if (state->cow_src_dir && state->cow_src_index) {
+		int pos = index_name_pos(state->cow_src_index, ce->name, ce->ce_namelen);
+		if (pos >= 0) {
+			struct cache_entry *src_ce = state->cow_src_index->cache[pos];
+			int is_oideq = oideq(&ce->oid, &src_ce->oid);
+			if (is_oideq) {
+				char *src_path = xstrfmt("%s/%s", state->cow_src_dir, ce->name);
+				struct stat src_st;
+				int stat_res = lstat(src_path, &src_st);
+				int match_res = stat_res ? -1 : ie_match_stat(state->cow_src_index, src_ce, &src_st, CE_MATCH_IGNORE_VALID|CE_MATCH_IGNORE_SKIP_WORKTREE);
+				if (!stat_res && !match_res) {
+					if (!copy_file_cow(path, src_path)) {
+						free(src_path);
+						return 1;
+					}
+				}
+				free(src_path);
+			}
+		}
+	}
+	return 0;
+}
+
+static int write_entry(struct cache_entry *ce,
+		       char *path, const struct conv_attrs *ca,
 		       const struct checkout *state, int to_tempfile,
 		       int *nr_checkouts)
 {
@@ -333,25 +360,10 @@ static int write_entry(struct cache_entry *ce, char *path, struct conv_attrs *ca
 		break;
 
 	case S_IFREG:
-		if (state->cow_src_dir && state->cow_src_index && !to_tempfile) {
-			int pos = index_name_pos(state->cow_src_index, ce->name, ce->ce_namelen);
-			if (pos >= 0) {
-				struct cache_entry *src_ce = state->cow_src_index->cache[pos];
-				if (oideq(&ce->oid, &src_ce->oid)) {
-					char *src_path = xstrfmt("%s/%s", state->cow_src_dir, ce->name);
-					struct stat src_st;
-					if (!lstat(src_path, &src_st) &&
-					    !ie_match_stat(state->cow_src_index, src_ce, &src_st, CE_MATCH_IGNORE_VALID|CE_MATCH_IGNORE_SKIP_WORKTREE)) {
-						if (!copy_file_cow(path, src_path)) {
-							free(src_path);
-							if (lstat(path, &st) == 0)
-								fstat_done = 1;
-							goto finish;
-						}
-					}
-					free(src_path);
-				}
-			}
+		if (!to_tempfile && checkout_cow_file(ce, state, path)) {
+			if (lstat(path, &st) == 0)
+				fstat_done = 1;
+			goto finish;
 		}
 
 		/*

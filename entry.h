@@ -12,6 +12,7 @@ struct checkout {
 	int base_dir_len;
 	const char *super_prefix;
 	const char *cow_src_dir;
+	const char *cow_src_index_file;
 	struct index_state *cow_src_index;
 	struct delayed_checkout *delayed_checkout;
 	struct checkout_metadata meta;
@@ -49,6 +50,8 @@ static inline int checkout_entry(struct cache_entry *ce,
 
 void enable_delayed_checkout(struct checkout *state);
 int finish_delayed_checkout(struct checkout *state, int show_progress);
+
+int checkout_cow_file(const struct cache_entry *ce, const struct checkout *state, const char *path);
 
 /*
  * Unlink the last component and schedule the leading directories for

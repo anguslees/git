@@ -126,6 +126,10 @@ int cmd_checkout__worker(int argc,
 	struct option checkout_worker_options[] = {
 		OPT_STRING(0, "prefix", &state.base_dir, N_("string"),
 			N_("when creating files, prepend <string>")),
+		OPT_STRING(0, "copy-on-write-src", &state.cow_src_dir, N_("string"),
+			N_("when cow is enabled, the source worktree path")),
+		OPT_STRING(0, "copy-on-write-src-index", &state.cow_src_index_file, N_("string"),
+			N_("when cow is enabled, the source index path")),
 		OPT_END()
 	};
 
@@ -142,6 +146,17 @@ int cmd_checkout__worker(int argc,
 	if (state.base_dir)
 		state.base_dir_len = strlen(state.base_dir);
 
+	if (state.cow_src_index_file && state.cow_src_dir) {
+		char *git_dir = xstrfmt("%s/.git", state.cow_src_dir);
+		state.cow_src_index = xcalloc(1, sizeof(*state.cow_src_index));
+		index_state_init(state.cow_src_index, the_repository);
+		if (read_index_from(state.cow_src_index, state.cow_src_index_file, git_dir) < 0) {
+			free(state.cow_src_index);
+			state.cow_src_index = NULL;
+		}
+		free(git_dir);
+	}
+
 	/*
 	 * Setting this on a worker won't actually update the index. We just
 	 * need to tell the checkout machinery to lstat() the written entries,
@@ -150,5 +165,10 @@ int cmd_checkout__worker(int argc,
 	state.refresh_cache = 1;
 
 	worker_loop(&state);
+	
+	if (state.cow_src_index) {
+		discard_index(state.cow_src_index);
+		free(state.cow_src_index);
+	}
 	return 0;
 }

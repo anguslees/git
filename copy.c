@@ -116,6 +116,7 @@ int copy_file_cow(const char *dst, const char *src)
 		trace2_data_string("cow", NULL, "status", "success");
 		return 0;
 	}
+	trace2_data_intmax("cow", NULL, "errno", errno);
 	return -1;
 
 #else
